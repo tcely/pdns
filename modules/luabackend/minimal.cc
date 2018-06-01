@@ -112,6 +112,14 @@ void LUABackend::lookup(const QType &qtype, const DNSName &qname, DNSPacket *p, 
     lua_pushliteral(lua, "code");
     lua_pushinteger(lua, qtype.getCode());
     lua_settable(lua, -3);
+    lua_newtable(lua);
+    lua_pushliteral(lua, "__tostring");
+    if(0 == luaL_loadstring(lua, "function (t) return t.name end")) {
+	lua_settable(lua, -3);
+    } else {
+	lua_pop(lua, 2);
+    }
+    lua_setmetatable(lua, -2);
 
     lua_pushstring(lua, qname.toString().c_str());
     lua_pushinteger(lua, domain_id);
