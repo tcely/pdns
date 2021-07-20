@@ -52,7 +52,6 @@
 */
     
 #include "namespaces.hh"
-#include "namespaces.hh"
 
 class MOADNSException : public runtime_error
 {
@@ -67,7 +66,7 @@ class MOADNSParser;
 class PacketReader
 {
 public:
-  PacketReader(const std::string& content, uint16_t initialPos=sizeof(dnsheader))
+  PacketReader(const pdns_string_view& content, uint16_t initialPos=sizeof(dnsheader))
     : d_pos(initialPos), d_startrecordpos(initialPos), d_content(content)
   {
     if(content.size() > std::numeric_limits<uint16_t>::max())
@@ -81,6 +80,7 @@ public:
   uint16_t get16BitInt();
   uint8_t get8BitInt();
   
+  void xfrNodeOrLocatorID(NodeOrLocatorID& val);
   void xfr48BitInt(uint64_t& val);
 
   void xfr32BitInt(uint32_t& val)
@@ -184,7 +184,7 @@ private:
   uint16_t d_startrecordpos; // needed for getBlob later on
   uint16_t d_recordlen;      // ditto
   uint16_t not_used; // Aligns the whole class on 8-byte boundaries
-  const std::string& d_content;
+  const pdns_string_view d_content;
 };
 
 struct DNSRecord;
@@ -195,6 +195,7 @@ public:
   static std::shared_ptr<DNSRecordContent> mastermake(const DNSRecord &dr, PacketReader& pr);
   static std::shared_ptr<DNSRecordContent> mastermake(const DNSRecord &dr, PacketReader& pr, uint16_t opcode);
   static std::shared_ptr<DNSRecordContent> mastermake(uint16_t qtype, uint16_t qclass, const string& zone);
+  static string upgradeContent(const DNSName& qname, const QType& qtype, const string& content);
 
   virtual std::string getZoneRepresentation(bool noDot=false) const = 0;
   virtual ~DNSRecordContent() {}
@@ -247,13 +248,18 @@ public:
     getZmakermap().erase(key);
   }
 
+  static bool isUnknownType(const string& name)
+  {
+    return boost::starts_with(name, "TYPE") || boost::starts_with(name, "type");
+  }
+
   static uint16_t TypeToNumber(const string& name)
   {
     n2typemap_t::const_iterator iter = getN2Typemap().find(toUpper(name));
     if(iter != getN2Typemap().end())
       return iter->second.second;
     
-    if(boost::starts_with(name, "TYPE") || boost::starts_with(name, "type"))
+    if (isUnknownType(name))
       return (uint16_t) pdns_stou(name.substr(4));
     
     throw runtime_error("Unknown DNS type '"+name+"'");
@@ -354,9 +360,37 @@ struct DNSZoneRecord
   int signttl{0};
   DNSName wildcardname;
   bool auth{true};
+  bool disabled{false};
   DNSRecord dr;
 };
 
+class UnknownRecordContent : public DNSRecordContent
+{
+public:
+  UnknownRecordContent(const DNSRecord& dr, PacketReader& pr)
+    : d_dr(dr)
+  {
+    pr.copyRecord(d_record, dr.d_clen);
+  }
+
+  UnknownRecordContent(const string& zone);
+
+  string getZoneRepresentation(bool noDot) const override;
+  void toPacket(DNSPacketWriter& pw) override;
+  uint16_t getType() const override
+  {
+    return d_dr.d_type;
+  }
+
+  const vector<uint8_t>& getRawContent() const
+  {
+    return d_record;
+  }
+
+private:
+  DNSRecord d_dr;
+  vector<uint8_t> d_record;
+};
 
 //! This class can be used to parse incoming packets, and is copyable
 class MOADNSParser : public boost::noncopyable
@@ -371,7 +405,7 @@ public:
   //! Parse from a pointer and length
   MOADNSParser(bool query, const char *packet, unsigned int len) : d_tsigPos(0)
   {
-    init(query, std::string(packet, len));
+    init(query, pdns_string_view(packet, len));
   }
 
   DNSName d_qname;
@@ -388,15 +422,18 @@ public:
   {
     return d_tsigPos;
   }
+
+  bool hasEDNS() const;
+
 private:
-  void init(bool query, const std::string& packet);
+  void init(bool query, const pdns_string_view& packet);
   uint16_t d_tsigPos;
 };
 
 string simpleCompress(const string& label, const string& root="");
 void ageDNSPacket(char* packet, size_t length, uint32_t seconds);
 void ageDNSPacket(std::string& packet, uint32_t seconds);
-void editDNSPacketTTL(char* packet, size_t length, std::function<uint32_t(uint8_t, uint16_t, uint16_t, uint32_t)> visitor);
+void editDNSPacketTTL(char* packet, size_t length, const std::function<uint32_t(uint8_t, uint16_t, uint16_t, uint32_t)>& visitor);
 uint32_t getDNSPacketMinTTL(const char* packet, size_t length, bool* seenAuthSOA=nullptr);
 uint32_t getDNSPacketLength(const char* packet, size_t length);
 uint16_t getRecordsOfTypeCount(const char* packet, size_t length, uint8_t section, uint16_t type);
@@ -482,7 +519,11 @@ public:
     uint32_t tmp;
     memcpy(&tmp, (void*) p, sizeof(tmp));
     tmp = ntohl(tmp);
-    tmp-=decrease;
+    if (tmp > decrease) {
+      tmp -= decrease;
+    } else {
+      tmp = 0;
+    }
     tmp = htonl(tmp);
     memcpy(d_packet + d_offset-4, (const char*)&tmp, sizeof(tmp));
   }

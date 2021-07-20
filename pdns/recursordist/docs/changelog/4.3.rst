@@ -2,6 +2,109 @@ Changelogs for 4.3.x
 ====================
 
 .. changelog::
+  :version: 4.3.7
+  :released: 22nd of March 2021
+
+  .. change::
+    :tags: Bug Fixes
+    :pullreq: 10193
+    :tickets: 10185
+
+    Make sure we take the right minimum for the packet cache TTL data in the SERVFAIL case.
+
+  .. change::
+    :tags: Improvements
+    :pullreq: 9804
+    :tickets: 9790
+
+    Do not chase CNAME during qname minimization step 4.
+
+.. changelog::
+  :version: 4.3.6
+  :released: 25th of November 2020
+
+  .. change::
+    :tags: Bug Fixes
+    :pullreq: 9718
+    :tickets: 9707
+
+    Do not add request to a wait chain that's already processed or being processed.
+
+  .. change::
+    :tags: Bug Fixes
+    :pullreq: 9706
+    :tickets: 9697
+
+    Do not send overly long NOD lookups.
+
+  .. change::
+    :tags: Bug Fixes
+    :pullreq: 9702
+    :tickets: 9696
+
+    Avoid a CNAME loop detection issue with DNS64.
+
+  .. change::
+    :tags: Bug Fixes
+    :pullreq: 9684
+    :tickets: 9680
+
+    If a.b.c CNAME x.a.b.c is encountered, switch off QName Minimization.
+
+  .. change::
+    :tags: Bug Fixes, Internal
+    :pullreq: 9609
+    :tickets: 9070
+
+    Previous placeholder fix was incomplete.
+
+
+
+.. changelog::
+  :version: 4.3.5
+  :released: 13th of October 2020
+
+  .. change::
+    :tags: Bug Fixes
+    :pullreq: 9604
+
+    Backport of CVE-2020-25829: Cache pollution.
+
+  .. change::
+    :tags: Improvements
+    :pullreq: 9527
+
+    Log when going Bogus because of a missing SOA in authority.
+
+  .. change::
+    :tags: Bug Fixes
+    :pullreq: 9525
+    :tickets: 9495
+
+    Watch the descriptor again after an out-of-order read timeout.
+
+  .. change::
+    :tags: Bug Fixes
+    :pullreq: 9507
+    :tickets: 9497
+
+    Raise an exception on invalid content in unknown records.
+
+  .. change::
+    :tags: Bug Fixes
+    :pullreq: 9501
+    :tickets: 9070
+
+    Boost 1.73 moved boost::bind placeholders to the placeholders namespace.x
+
+  .. change::
+    :tags: Bug Fixes
+    :pullreq: 9457
+    :tickets: 9454
+
+    Fix the parsing of `dont-throttle-netmasks` in the presence of `dont-throttle-names`.
+
+.. changelog::
   :version: 4.3.4
   :released: 8th of September 2020
 
@@ -781,4 +884,3 @@ Changelogs for 4.3.x
     :pullreq: 7841
 
     Recursor: log udp tc bits during trace
-

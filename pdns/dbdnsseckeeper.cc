@@ -31,6 +31,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fstream>
+#include <unordered_map>
 #include <boost/algorithm/string.hpp>
 #include <boost/format.hpp>
 #include <boost/assign/std/vector.hpp> // for 'operator+=()'
@@ -176,7 +177,8 @@ DNSSECPrivateKey DNSSECKeeper::getKeyById(const DNSName& zname, unsigned int id)
     
     DNSSECPrivateKey dpk;
     DNSKEYRecordContent dkrc;
-    dpk.setKey(shared_ptr<DNSCryptoKeyEngine>(DNSCryptoKeyEngine::makeFromISCString(dkrc, kd.content)));
+    auto key = shared_ptr<DNSCryptoKeyEngine>(DNSCryptoKeyEngine::makeFromISCString(dkrc, kd.content));
+    dpk.setKey(key);
     dpk.d_flags = kd.flags;
     dpk.d_algorithm = dkrc.d_algorithm;
     
@@ -221,7 +223,14 @@ void DNSSECKeeper::getFromMetaOrDefault(const DNSName& zname, const std::string&
 
 bool DNSSECKeeper::getFromMeta(const DNSName& zname, const std::string& key, std::string& value)
 {
-  static int ttl = ::arg().asNum("domain-metadata-cache-ttl");
+  if (d_metaUpdate) {
+    if (d_keymetadb->inTransaction()) {
+      throw runtime_error("DNSSECKeeper::getFromMeta() called after an update from within a transaction.");
+    }
+    d_metaUpdate=false;
+  }
+
+  static int ttl = ::arg().asNum("zone-metadata-cache-ttl");
 
   if(!((++s_ops) % 100000)) {
     cleanup();
@@ -338,7 +347,7 @@ bool DNSSECKeeper::getNSEC3PARAM(const DNSName& zname, NSEC3PARAMRecordContent* 
   static int maxNSEC3Iterations=::arg().asNum("max-nsec3-iterations");
   if(ns3p) {
     *ns3p = NSEC3PARAMRecordContent(value);
-    if (ns3p->d_iterations > maxNSEC3Iterations) {
+    if (ns3p->d_iterations > maxNSEC3Iterations && !isPresigned(zname, useCache)) {
       ns3p->d_iterations = maxNSEC3Iterations;
       g_log<<Logger::Error<<"Number of NSEC3 iterations for zone '"<<zname<<"' is above 'max-nsec3-iterations'. Value adjusted to: "<<maxNSEC3Iterations<<endl;
     }
@@ -387,6 +396,10 @@ bool DNSSECKeeper::checkNSEC3PARAM(const NSEC3PARAMRecordContent& ns3p, string& 
 
 bool DNSSECKeeper::setNSEC3PARAM(const DNSName& zname, const NSEC3PARAMRecordContent& ns3p, const bool& narrow)
 {
+  if (d_keymetadb->inTransaction()) {
+    d_metaUpdate = true;
+  }
+
   string error_msg = "";
   if (!checkNSEC3PARAM(ns3p, error_msg))
     throw runtime_error("NSEC3PARAMs provided for zone '"+zname.toLogString()+"' are invalid: " + error_msg);
@@ -407,12 +420,20 @@ bool DNSSECKeeper::setNSEC3PARAM(const DNSName& zname, const NSEC3PARAMRecordCon
 
 bool DNSSECKeeper::unsetNSEC3PARAM(const DNSName& zname)
 {
+  if (d_keymetadb->inTransaction()) {
+    d_metaUpdate = true;
+  }
+
   return (d_keymetadb->setDomainMetadata(zname, "NSEC3PARAM", vector<string>()) && d_keymetadb->setDomainMetadata(zname, "NSEC3NARROW", vector<string>())) && clearMetaCache(zname);
 }
 
 
 bool DNSSECKeeper::setPresigned(const DNSName& zname)
 {
+  if (d_keymetadb->inTransaction()) {
+    d_metaUpdate = true;
+  }
+
   vector<string> meta;
   meta.push_back("1");
   return d_keymetadb->setDomainMetadata(zname, "PRESIGNED", meta) && clearMetaCache(zname);
@@ -420,6 +441,10 @@ bool DNSSECKeeper::setPresigned(const DNSName& zname)
 
 bool DNSSECKeeper::unsetPresigned(const DNSName& zname)
 {
+  if (d_keymetadb->inTransaction()) {
+    d_metaUpdate = true;
+  }
+
   return d_keymetadb->setDomainMetadata(zname, "PRESIGNED", vector<string>()) && clearMetaCache(zname);
 }
 
@@ -434,6 +459,10 @@ bool DNSSECKeeper::unsetPresigned(const DNSName& zname)
  */
 bool DNSSECKeeper::setPublishCDS(const DNSName& zname, const string& digestAlgos)
 {
+  if (d_keymetadb->inTransaction()) {
+    d_metaUpdate = true;
+  }
+
   vector<string> meta;
   meta.push_back(digestAlgos);
   return d_keymetadb->setDomainMetadata(zname, "PUBLISH-CDS", meta) && clearMetaCache(zname);
@@ -452,6 +481,10 @@ void DNSSECKeeper::getPublishCDS(const DNSName& zname, std::string& value)
  */
 bool DNSSECKeeper::unsetPublishCDS(const DNSName& zname)
 {
+  if (d_keymetadb->inTransaction()) {
+    d_metaUpdate = true;
+  }
+
   return d_keymetadb->setDomainMetadata(zname, "PUBLISH-CDS", vector<string>()) && clearMetaCache(zname);
 }
 
@@ -461,10 +494,14 @@ bool DNSSECKeeper::unsetPublishCDS(const DNSName& zname)
  * @param zname        DNSName of the zone
  * @return             true if the data was inserted, false otherwise
  */
-bool DNSSECKeeper::setPublishCDNSKEY(const DNSName& zname)
+bool DNSSECKeeper::setPublishCDNSKEY(const DNSName& zname, bool deleteAlg)
 {
+  if (d_keymetadb->inTransaction()) {
+    d_metaUpdate = true;
+  }
+
   vector<string> meta;
-  meta.push_back("1");
+  meta.push_back(deleteAlg ? "0" : "1");
   return d_keymetadb->setDomainMetadata(zname, "PUBLISH-CDNSKEY", meta) && clearMetaCache(zname);
 }
 
@@ -481,6 +518,10 @@ void DNSSECKeeper::getPublishCDNSKEY(const DNSName& zname, std::string& value)
  */
 bool DNSSECKeeper::unsetPublishCDNSKEY(const DNSName& zname)
 {
+  if (d_keymetadb->inTransaction()) {
+    d_metaUpdate = true;
+  }
+
   return d_keymetadb->setDomainMetadata(zname, "PUBLISH-CDNSKEY", vector<string>()) && clearMetaCache(zname);
 }
 
@@ -505,7 +546,7 @@ DNSSECKeeper::keyset_t DNSSECKeeper::getEntryPoints(const DNSName& zname)
 DNSSECKeeper::keyset_t DNSSECKeeper::getKeys(const DNSName& zone, bool useCache)
 {
   static int ttl = ::arg().asNum("dnssec-key-cache-ttl");
-  unsigned int now = time(0);
+  unsigned int now = time(nullptr);
 
   if(!((++s_ops) % 100000)) {
     cleanup();
@@ -535,8 +576,8 @@ DNSSECKeeper::keyset_t DNSSECKeeper::getKeys(const DNSName& zone, bool useCache)
   for(const DNSBackend::KeyData &keydata : dbkeyset) {
     DNSSECPrivateKey dpk;
     DNSKEYRecordContent dkrc;
-
-    dpk.setKey(shared_ptr<DNSCryptoKeyEngine>(DNSCryptoKeyEngine::makeFromISCString(dkrc, keydata.content)));
+    auto key = shared_ptr<DNSCryptoKeyEngine>(DNSCryptoKeyEngine::makeFromISCString(dkrc, keydata.content));
+    dpk.setKey(key);
 
     if(keydata.active) {
       if(keydata.flags == 257)
@@ -552,8 +593,8 @@ DNSSECKeeper::keyset_t DNSSECKeeper::getKeys(const DNSName& zone, bool useCache)
   {
     DNSSECPrivateKey dpk;
     DNSKEYRecordContent dkrc;
-
-    dpk.setKey(shared_ptr<DNSCryptoKeyEngine>(DNSCryptoKeyEngine::makeFromISCString(dkrc, kd.content)));
+    auto key = shared_ptr<DNSCryptoKeyEngine>(DNSCryptoKeyEngine::makeFromISCString(dkrc, kd.content));
+    dpk.setKey(key);
 
     dpk.d_flags = kd.flags;
     dpk.d_algorithm = dkrc.d_algorithm;
@@ -598,36 +639,37 @@ bool DNSSECKeeper::checkKeys(const DNSName& zone, vector<string>* errorMessages)
 
   for(const DNSBackend::KeyData &keydata : dbkeyset) {
     DNSKEYRecordContent dkrc;
-    shared_ptr<DNSCryptoKeyEngine> dke(DNSCryptoKeyEngine::makeFromISCString(dkrc, keydata.content));
+    auto dke = DNSCryptoKeyEngine::makeFromISCString(dkrc, keydata.content);
     retval = dke->checkKey(errorMessages) && retval;
   }
 
   return retval;
 }
 
-bool DNSSECKeeper::getPreRRSIGs(UeberBackend& db, const DNSName& signer, const DNSName& qname,
-        const DNSName& wildcardname, const QType& qtype,
-        DNSResourceRecord::Place signPlace, vector<DNSZoneRecord>& rrsigs, uint32_t signTTL)
+void DNSSECKeeper::getPreRRSIGs(UeberBackend& db, vector<DNSZoneRecord>& rrs, uint32_t signTTL)
 {
-  // cerr<<"Doing DB lookup for precomputed RRSIGs for '"<<(wildcardname.empty() ? qname : wildcardname)<<"'"<<endl;
-        SOAData sd;
-        if(!db.getSOAUncached(signer, sd)) {
-                DLOG(g_log<<"Could not get SOA for domain"<<endl);
-                return false;
-        }
-        db.lookup(QType(QType::RRSIG), wildcardname.countLabels() ? wildcardname : qname, sd.domain_id);
-        DNSZoneRecord rr;
-        while(db.get(rr)) {
-          auto rrsig = getRR<RRSIGRecordContent>(rr.dr);
-          if(rrsig->d_type == qtype.getCode() && rrsig->d_signer==signer) {
-            if (wildcardname.countLabels())
-              rr.dr.d_name = qname;
-            rr.dr.d_place = signPlace;
-            rr.dr.d_ttl = signTTL;
-            rrsigs.push_back(rr);
-          }
-        }
-        return true;
+  if(rrs.empty()) {
+    return;
+  }
+
+  const auto rr = *rrs.rbegin();
+
+  DNSZoneRecord dzr;
+  std::shared_ptr<RRSIGRecordContent> rrsig;
+
+  db.lookup(QType(QType::RRSIG), !rr.wildcardname.empty() ? rr.wildcardname : rr.dr.d_name, rr.domain_id);
+  while(db.get(dzr)) {
+    rrsig = getRR<RRSIGRecordContent>(dzr.dr);
+    if(rrsig->d_type == rr.dr.d_type) {
+      if(!rr.wildcardname.empty()) {
+        dzr.dr.d_name = rr.dr.d_name;
+      }
+      dzr.dr.d_place = rr.dr.d_place;
+      dzr.dr.d_ttl = signTTL;
+
+      rrs.emplace_back(dzr);
+    }
+  }
 }
 
 bool DNSSECKeeper::TSIGGrantsAccess(const DNSName& zone, const DNSName& keyname)
@@ -677,6 +719,15 @@ bool DNSSECKeeper::unSecureZone(const DNSName& zone, string& error, string& info
   return true;
 }
 
+
+struct RecordStatus
+{
+  DNSName ordername;
+  bool auth{false};
+  bool update{false};
+};
+
+
 /* Rectifies the zone
  *
  * \param zone The zone to rectify
@@ -716,23 +767,9 @@ bool DNSSECKeeper::rectifyZone(const DNSName& zone, string& error, string& info,
   ostringstream infostream;
   DNSResourceRecord rr;
   set<DNSName> qnames, nsset, dsnames, insnonterm, delnonterm;
-  map<DNSName,bool> nonterm;
+  std::unordered_map<DNSName,bool> nonterm;
   vector<DNSResourceRecord> rrs;
-
-  while(sd.db->get(rr)) {
-    rr.qname.makeUsLowerCase();
-    if (rr.qtype.getCode())
-    {
-      rrs.push_back(rr);
-      qnames.insert(rr.qname);
-      if(rr.qtype.getCode() == QType::NS && rr.qname != zone)
-        nsset.insert(rr.qname);
-      if(rr.qtype.getCode() == QType::DS)
-        dsnames.insert(rr.qname);
-    }
-    else
-      delnonterm.insert(rr.qname);
-  }
+  std::unordered_map<DNSName,RecordStatus> rss;
 
   NSEC3PARAMRecordContent ns3pr;
   bool securedZone = isSecuredZone(zone, doTransaction);
@@ -741,23 +778,49 @@ bool DNSSECKeeper::rectifyZone(const DNSName& zone, string& error, string& info,
   if(securedZone) {
     haveNSEC3 = getNSEC3PARAM(zone, &ns3pr, &narrow, doTransaction);
     isOptOut = (haveNSEC3 && ns3pr.d_flags);
+  }
 
+  while(sd.db->get(rr)) {
+    rr.qname.makeUsLowerCase();
+
+    auto res=rss.insert({rr.qname,{rr.ordername, rr.auth, rr.ordername.empty() != (!securedZone || narrow)}}); // only a set ordername is reliable
+    if (!res.second && !res.first->second.update) {
+      res.first->second.update = res.first->second.auth != rr.auth || res.first->second.ordername != rr.ordername;
+    }
+    else if ((!securedZone || narrow) && rr.qname == zone) {
+      res.first->second.update = true;
+    }
+
+    if (rr.qtype.getCode())
+    {
+      qnames.insert(rr.qname);
+      if(rr.qtype.getCode() == QType::NS && rr.qname != zone)
+        nsset.insert(rr.qname);
+      if(rr.qtype.getCode() == QType::DS)
+        dsnames.insert(rr.qname);
+      rrs.emplace_back(rr);
+    }
+    else
+      delnonterm.insert(std::move(rr.qname));
+  }
+
+  if(securedZone) {
     if(!haveNSEC3) {
-      infostream<<"Adding NSEC ordering information ";
+      infostream<<"Adding NSEC ordering information for zone '"<<zone<<"'";
     }
     else if(!narrow) {
       if(!isOptOut) {
-        infostream<<"Adding NSEC3 hashed ordering information for '"<<zone<<"'";
+        infostream<<"Adding NSEC3 hashed ordering information for zone '"<<zone<<"'";
       }
       else {
-        infostream<<"Adding NSEC3 opt-out hashed ordering information for '"<<zone<<"'";
+        infostream<<"Adding NSEC3 opt-out hashed ordering information for zone '"<<zone<<"'";
       }
     } else {
-      infostream<<"Erasing NSEC3 ordering since we are narrow, only setting 'auth' fields";
+      infostream<<"Erasing NSEC3 ordering since we are narrow, only setting 'auth' fields for zone '"<<zone<<"'";
     }
   }
   else {
-    infostream<<"Adding empty non-terminals for non-DNSSEC zone";
+    infostream<<"Adding empty non-terminals for non-DNSSEC zone '"<<zone<<"'";
   }
 
   set<DNSName> nsec3set;
@@ -790,9 +853,11 @@ bool DNSSECKeeper::rectifyZone(const DNSName& zone, string& error, string& info,
 
   bool realrr=true;
   bool doent=true;
+  int updates=0;
   uint32_t maxent = ::arg().asNum("max-ent-entries");
 
   dononterm:;
+  std::unordered_map<DNSName,RecordStatus>::const_iterator it;
   for (const auto& qname: qnames)
   {
     bool auth=true;
@@ -820,20 +885,32 @@ bool DNSSECKeeper::rectifyZone(const DNSName& zone, string& error, string& info,
       }
     }
     else if (realrr && securedZone) // NSEC
+    {
       ordername=qname.makeRelative(zone);
+    }
 
-    sd.db->updateDNSSECOrderNameAndAuth(sd.domain_id, qname, ordername, auth);
+    it = rss.find(qname);
+    if(it == rss.end() || it->second.update || it->second.auth != auth || it->second.ordername != ordername) {
+      sd.db->updateDNSSECOrderNameAndAuth(sd.domain_id, qname, ordername, auth);
+      ++updates;
+    }
 
     if(realrr)
     {
-      if (dsnames.count(qname))
+      if (dsnames.count(qname)) {
         sd.db->updateDNSSECOrderNameAndAuth(sd.domain_id, qname, ordername, true, QType::DS);
+        ++updates;
+      }
       if (!auth || nsset.count(qname)) {
         ordername.clear();
-        if(isOptOut && !dsnames.count(qname))
+        if(isOptOut && !dsnames.count(qname)){
           sd.db->updateDNSSECOrderNameAndAuth(sd.domain_id, qname, ordername, false, QType::NS);
+          ++updates;
+        }
         sd.db->updateDNSSECOrderNameAndAuth(sd.domain_id, qname, ordername, false, QType::A);
+        ++updates;
         sd.db->updateDNSSECOrderNameAndAuth(sd.domain_id, qname, ordername, false, QType::AAAA);
+        ++updates;
       }
 
       if(doent)
@@ -889,6 +966,7 @@ bool DNSSECKeeper::rectifyZone(const DNSName& zone, string& error, string& info,
   if (doTransaction)
     sd.db->commitTransaction();
 
+  infostream<<", "<<updates<<" updates";
   info = infostream.str();
   return true;
 }
@@ -896,7 +974,7 @@ bool DNSSECKeeper::rectifyZone(const DNSName& zone, string& error, string& info,
 void DNSSECKeeper::cleanup()
 {
   struct timeval now;
-  Utility::gettimeofday(&now, 0);
+  Utility::gettimeofday(&now, nullptr);
 
   if(now.tv_sec - s_last_prune > (time_t)(30)) {
     {

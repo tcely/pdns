@@ -39,17 +39,18 @@
 
 static string g_INstr("IN");
 
-ZoneParserTNG::ZoneParserTNG(const string& fname, const DNSName& zname, const string& reldir) : d_reldir(reldir), 
-                                                                                               d_zonename(zname), d_defaultttl(3600), 
-                                                                                               d_templatecounter(0), d_templatestop(0),
-                                                                                               d_templatestep(0), d_havedollarttl(false){
+ZoneParserTNG::ZoneParserTNG(const string& fname, DNSName  zname, string  reldir, bool upgradeContent):
+  d_reldir(std::move(reldir)), d_zonename(std::move(zname)), d_defaultttl(3600), 
+  d_templatecounter(0), d_templatestop(0), d_templatestep(0),
+  d_havedollarttl(false), d_fromfile(true), d_upgradeContent(upgradeContent)
+{
   stackFile(fname);
 }
 
-ZoneParserTNG::ZoneParserTNG(const vector<string> zonedata, const DNSName& zname):
-  d_zonename(zname), d_zonedata(zonedata), d_defaultttl(3600),
+ZoneParserTNG::ZoneParserTNG(const vector<string>& zonedata, DNSName  zname, bool upgradeContent):
+  d_zonename(std::move(zname)), d_zonedata(zonedata), d_defaultttl(3600),
   d_templatecounter(0), d_templatestop(0), d_templatestep(0),
-  d_havedollarttl(false), d_fromfile(false)
+  d_havedollarttl(false), d_fromfile(false), d_upgradeContent(upgradeContent)
 {
   d_zonedataline = d_zonedata.begin();
 }
@@ -294,7 +295,7 @@ bool ZoneParserTNG::get(DNSResourceRecord& rr, std::string* comment)
   if(!getTemplateLine() && !getLine())
     return false;
 
-  boost::trim_right_if(d_line, is_any_of(" \t\r\n\x1a"));
+  boost::trim_right_if(d_line, boost::is_any_of(" \t\r\n\x1a"));
   if(comment)
     comment->clear();
   if(comment && d_line.find(';') != string::npos)
@@ -312,7 +313,7 @@ bool ZoneParserTNG::get(DNSResourceRecord& rr, std::string* comment)
   if(d_line[0]=='$') { 
     string command=makeString(d_line, d_parts[0]);
     if(pdns_iequals(command,"$TTL") && d_parts.size() > 1) {
-      d_defaultttl=makeTTLFromZone(trim_right_copy_if(makeString(d_line, d_parts[1]), is_any_of(";")));
+      d_defaultttl=makeTTLFromZone(trim_right_copy_if(makeString(d_line, d_parts[1]), boost::is_any_of(";")));
       d_havedollarttl=true;
     }
     else if(pdns_iequals(command,"$INCLUDE") && d_parts.size() > 1 && d_fromfile) {
@@ -387,7 +388,8 @@ bool ZoneParserTNG::get(DNSResourceRecord& rr, std::string* comment)
   string nextpart;
   
   rr.ttl=d_defaultttl;
-  bool haveTTL=0, haveQTYPE=0;
+  bool haveTTL{false}, haveQTYPE{false};
+  string qtypeString;
   pair<string::size_type, string::size_type> range;
 
   while(!d_parts.empty()) {
@@ -419,9 +421,10 @@ bool ZoneParserTNG::get(DNSResourceRecord& rr, std::string* comment)
       break;
 
     try {
-      rr.qtype=DNSRecordContent::TypeToNumber(nextpart);
+      rr.qtype = DNSRecordContent::TypeToNumber(nextpart);
       // cout<<"Got qtype ("<<rr.qtype.getCode()<<")\n";
-      haveQTYPE=1;
+      qtypeString = nextpart;
+      haveQTYPE = true;
       continue;
     }
     catch(...) {
@@ -436,7 +439,7 @@ bool ZoneParserTNG::get(DNSResourceRecord& rr, std::string* comment)
   //  rr.content=d_line.substr(range.first);
   rr.content.assign(d_line, range.first, string::npos);
   chopComment(rr.content);
-  trim_if(rr.content, is_any_of(" \r\n\t\x1a"));
+  trim_if(rr.content, boost::is_any_of(" \r\n\t\x1a"));
 
   if(rr.content.size()==1 && rr.content[0]=='@')
     rr.content=d_zonename.toString();
@@ -444,9 +447,9 @@ bool ZoneParserTNG::get(DNSResourceRecord& rr, std::string* comment)
   if(findAndElide(rr.content, '(')) {      // have found a ( and elided it
     if(!findAndElide(rr.content, ')')) {
       while(getLine()) {
-        trim_right(d_line);
+        boost::trim_right(d_line);
         chopComment(d_line);
-        trim(d_line);
+        boost::trim(d_line);
         
         bool ended = findAndElide(d_line, ')');
         rr.content+=" "+d_line;
@@ -455,7 +458,11 @@ bool ZoneParserTNG::get(DNSResourceRecord& rr, std::string* comment)
       }
     }
   }
-  trim_if(rr.content, is_any_of(" \r\n\t\x1a"));
+  boost::trim_if(rr.content, boost::is_any_of(" \r\n\t\x1a"));
+
+  if (d_upgradeContent && DNSRecordContent::isUnknownType(qtypeString)) {
+    rr.content = DNSRecordContent::upgradeContent(rr.qname, rr.qtype, rr.content);
+  }
 
   vector<string> recparts;
   switch(rr.qtype.getCode()) {
@@ -466,7 +473,7 @@ bool ZoneParserTNG::get(DNSResourceRecord& rr, std::string* comment)
         try {
           recparts[1] = toCanonic(d_zonename, recparts[1]).toStringRootDot();
         } catch (std::exception &e) {
-          throw PDNSException("Error in record '" + rr.qname.toLogString() + " " + rr.qtype.getName() + "': " + e.what());
+          throw PDNSException("Error in record '" + rr.qname.toLogString() + " " + rr.qtype.toString() + "': " + e.what());
         }
       }
       rr.content=recparts[0]+" "+recparts[1];
@@ -489,7 +496,7 @@ bool ZoneParserTNG::get(DNSResourceRecord& rr, std::string* comment)
         try {
           recparts[3] = toCanonic(d_zonename, recparts[3]).toStringRootDot();
         } catch (std::exception &e) {
-          throw PDNSException("Error in record '" + rr.qname.toLogString() + " " + rr.qtype.getName() + "': " + e.what());
+          throw PDNSException("Error in record '" + rr.qname.toLogString() + " " + rr.qtype.toString() + "': " + e.what());
         }
       }
       rr.content=recparts[0]+" "+recparts[1]+" "+recparts[2]+" "+recparts[3];
@@ -504,7 +511,7 @@ bool ZoneParserTNG::get(DNSResourceRecord& rr, std::string* comment)
     try {
       rr.content = toCanonic(d_zonename, rr.content).toStringRootDot();
     } catch (std::exception &e) {
-      throw PDNSException("Error in record '" + rr.qname.toLogString() + " " + rr.qtype.getName() + "': " + e.what());
+      throw PDNSException("Error in record '" + rr.qname.toLogString() + " " + rr.qtype.toString() + "': " + e.what());
     }
     break;
   case QType::AFSDB:
@@ -513,7 +520,7 @@ bool ZoneParserTNG::get(DNSResourceRecord& rr, std::string* comment)
       try {
         recparts[1]=toCanonic(d_zonename, recparts[1]).toStringRootDot();
       } catch (std::exception &e) {
-        throw PDNSException("Error in record '" + rr.qname.toLogString() + " " + rr.qtype.getName() + "': " + e.what());
+        throw PDNSException("Error in record '" + rr.qname.toLogString() + " " + rr.qtype.toString() + "': " + e.what());
       }
     } else {
       throw PDNSException("AFSDB record for "+rr.qname.toLogString()+" invalid");
@@ -535,7 +542,7 @@ bool ZoneParserTNG::get(DNSResourceRecord& rr, std::string* comment)
         recparts[0]=toCanonic(d_zonename, recparts[0]).toStringRootDot();
         recparts[1]=toCanonic(d_zonename, recparts[1]).toStringRootDot();
       } catch (std::exception &e) {
-        throw PDNSException("Error in record '" + rr.qname.toLogString() + " " + rr.qtype.getName() + "': " + e.what());
+        throw PDNSException("Error in record '" + rr.qname.toLogString() + " " + rr.qtype.toString() + "': " + e.what());
       }
     }
     rr.content.clear();

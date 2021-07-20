@@ -81,7 +81,7 @@ public:
     EventKey key;
     std::shared_ptr<pdns_ucontext_t> context;
     struct timeval ttd;
-    int tid;    
+    int tid;
   };
 
   typedef multi_index_container<
@@ -97,11 +97,19 @@ public:
   void initMainStackBounds()
   {
 #ifdef HAVE_FIBER_SANITIZER
+
+#ifdef HAVE_PTHREAD_GETATTR_NP
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_getattr_np(pthread_self(), &attr);
     pthread_attr_getstack(&attr, &t_mainStack, &t_mainStackSize);
     pthread_attr_destroy(&attr);
+#endif
+#if defined(HAVE_PTHREAD_GET_STACKSIZE_NP) && defined(HAVE_PTHREAD_GET_STACKADDR_NP)
+    t_mainStack = pthread_get_stackaddr_np(pthread_self());
+    t_mainStackSize = pthread_get_stacksize_np(pthread_self());
+#endif
+
 #endif /* HAVE_FIBER_SANITIZER */
   }
 
@@ -128,7 +136,7 @@ public:
   bool noProcesses() const;
   unsigned int numProcesses() const;
   int getTid() const;
-  unsigned int getMaxStackUsage();
+  uint64_t getMaxStackUsage();
   unsigned int getUsec();
 
 private:

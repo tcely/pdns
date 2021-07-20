@@ -1,4 +1,14 @@
-AM_CPPFLAGS += $(SYSTEMD_CFLAGS) $(LUA_CFLAGS) $(LIBEDIT_CFLAGS) $(LIBSODIUM_CFLAGS) $(FSTRM_CFLAGS) $(YAHTTP_CFLAGS) $(SANITIZER_FLAGS) $(NET_SNMP_CFLAGS) $(LIBCAP_CFLAGS) -DSYSCONFDIR=\"${sysconfdir}\"
+AM_CPPFLAGS += $(SYSTEMD_CFLAGS) \
+	$(LUA_CFLAGS) \
+	$(LIBEDIT_CFLAGS) \
+	$(LIBSODIUM_CFLAGS) \
+	$(FSTRM_CFLAGS) \
+	$(YAHTTP_CFLAGS) \
+	$(NET_SNMP_CFLAGS) \
+	$(LIBCAP_CFLAGS) \
+	-I$(top_srcdir)/ext/protozero/include \
+	-DSYSCONFDIR=\"${sysconfdir}\" \
+	-DBOOST_CONTAINER_USE_STD_EXCEPTIONS
 
 ACLOCAL_AMFLAGS = -I m4
 
@@ -6,13 +16,9 @@ SUBDIRS=ext/ipcrypt \
 	ext/yahttp
 
 CLEANFILES = \
-	dnsmessage.pb.cc \
-	dnsmessage.pb.h \
 	htmlfiles.h.tmp \
 	htmlfiles.h \
-	dnsdist-lua-ffi-interface.inc \
-	dnstap.pb.cc \
-	dnstap.pb.h
+	dnsdist-lua-ffi-interface.inc
 
 dnslabeltext.cc: dnslabeltext.rl
 	$(AM_V_GEN)$(RAGEL) $< -o dnslabeltext.cc
@@ -21,7 +27,7 @@ BUILT_SOURCES=htmlfiles.h \
 	dnsdist-lua-ffi-interface.inc \
 	dnslabeltext.cc
 
-htmlfiles.h: $(srcdir)/html/*
+htmlfiles.h: $(srcdir)/html/* $(srcdir)/incfiles
 	$(AM_V_GEN)$(srcdir)/incfiles $(srcdir) > $@.tmp
 	@mv $@.tmp $@
 
@@ -38,7 +44,9 @@ html/js/%.min.js: src_js/%.js
 min_js: $(MIN_JS_FILES)
 
 if HAVE_RE2
+# Some versions of pkg_config add -std=c11++, override that
 AM_CPPFLAGS += $(RE2_CFLAGS)
+AM_CPPFLAGS += -std=c++17
 endif
 
 if HAVE_DNS_OVER_TLS
@@ -81,8 +89,6 @@ EXTRA_DIST=COPYING \
 	   README.md \
 	   delaypipe.cc delaypipe.hh \
 	   html \
-	   contrib \
-	   ext/incbin/UNLICENSE \
 	   incfiles \
 	   src_js \
 	   dnsdist.service.in \
@@ -97,6 +103,7 @@ EXTRA_DIST=COPYING \
 	   portsmplexer.cc \
 	   cdb.cc cdb.hh \
 	   ext/lmdb-safe/lmdb-safe.cc ext/lmdb-safe/lmdb-safe.hh \
+	   ext/protozero/include/* \
 	   builder-support/gen-version
 
 bin_PROGRAMS = dnsdist
@@ -121,55 +128,64 @@ dnsdist_SOURCES = \
 	cachecleaner.hh \
 	capabilities.cc capabilities.hh \
 	circular_buffer.hh \
+	connection-management.hh \
 	dns.cc dns.hh \
 	dnscrypt.cc dnscrypt.hh \
-	dnsdist.cc dnsdist.hh \
 	dnsdist-backend.cc \
-	dnsdist-dynbpf.cc dnsdist-dynbpf.hh \
 	dnsdist-cache.cc dnsdist-cache.hh \
 	dnsdist-carbon.cc \
 	dnsdist-console.cc dnsdist-console.hh \
 	dnsdist-dnscrypt.cc \
 	dnsdist-dynblocks.cc dnsdist-dynblocks.hh \
+	dnsdist-dynbpf.cc dnsdist-dynbpf.hh \
 	dnsdist-ecs.cc dnsdist-ecs.hh \
 	dnsdist-healthchecks.cc dnsdist-healthchecks.hh \
 	dnsdist-idstate.cc \
 	dnsdist-kvs.hh dnsdist-kvs.cc \
 	dnsdist-lbpolicies.cc dnsdist-lbpolicies.hh \
-	dnsdist-lua.hh dnsdist-lua.cc \
 	dnsdist-lua-actions.cc \
-	dnsdist-lua-bindings.cc \
 	dnsdist-lua-bindings-dnscrypt.cc \
 	dnsdist-lua-bindings-dnsquestion.cc \
 	dnsdist-lua-bindings-kvs.cc \
 	dnsdist-lua-bindings-packetcache.cc \
 	dnsdist-lua-bindings-protobuf.cc \
-	dnsdist-lua-ffi.cc dnsdist-lua-ffi.hh \
+	dnsdist-lua-bindings.cc \
 	dnsdist-lua-ffi-interface.h dnsdist-lua-ffi-interface.inc \
-	dnsdist-lua-inspection.cc \
+	dnsdist-lua-ffi.cc dnsdist-lua-ffi.hh \
 	dnsdist-lua-inspection-ffi.cc dnsdist-lua-inspection-ffi.hh \
+	dnsdist-lua-inspection.cc \
 	dnsdist-lua-rules.cc \
 	dnsdist-lua-vars.cc \
+	dnsdist-lua-web.cc \
+	dnsdist-lua.cc dnsdist-lua.hh \
 	dnsdist-prometheus.hh \
 	dnsdist-protobuf.cc dnsdist-protobuf.hh \
 	dnsdist-proxy-protocol.cc dnsdist-proxy-protocol.hh \
 	dnsdist-rings.cc dnsdist-rings.hh \
-	dnsdist-rules.hh \
+	dnsdist-rules.cc dnsdist-rules.hh \
 	dnsdist-secpoll.cc dnsdist-secpoll.hh \
 	dnsdist-snmp.cc dnsdist-snmp.hh \
 	dnsdist-systemd.cc dnsdist-systemd.hh \
+	dnsdist-tcp-downstream.cc dnsdist-tcp-downstream.hh \
+	dnsdist-tcp-upstream.hh \
 	dnsdist-tcp.cc \
 	dnsdist-web.cc dnsdist-web.hh \
 	dnsdist-xpf.cc dnsdist-xpf.hh \
+	dnsdist.cc dnsdist.hh \
 	dnslabeltext.cc \
 	dnsname.cc dnsname.hh \
 	dnsparser.hh dnsparser.cc \
+	dnstap.cc dnstap.hh \
 	dnswriter.cc dnswriter.hh \
 	doh.hh doh.cc \
 	dolog.hh \
-	ednsoptions.cc ednsoptions.hh \
 	ednscookies.cc ednscookies.hh \
+	ednsoptions.cc ednsoptions.hh \
 	ednssubnet.cc ednssubnet.hh \
+	ext/json11/json11.cpp \
+	ext/json11/json11.hpp \
+	ext/libbpf/libbpf.h \
+	ext/luawrapper/include/LuaContext.hpp \
 	fstrm_logger.cc fstrm_logger.hh \
 	gettime.cc gettime.hh \
 	htmlfiles.h \
@@ -179,35 +195,82 @@ dnsdist_SOURCES = \
 	misc.cc misc.hh \
 	mplexer.hh \
 	namespaces.hh \
+	noinitvector.hh \
 	packetcache.hh \
 	pdnsexception.hh \
-	protobuf.cc protobuf.hh \
+	pollmplexer.cc \
+	protozero.cc protozero.hh \
 	proxy-protocol.cc proxy-protocol.hh \
-	dnstap.cc dnstap.hh \
 	qtype.cc qtype.hh \
 	remote_logger.cc remote_logger.hh \
-	pollmplexer.cc \
 	sholder.hh \
 	snmp-agent.cc snmp-agent.hh \
 	sodcrypto.cc sodcrypto.hh \
 	sstuff.hh \
-	svc-records.cc svc-records.hh \
+	stat_t.hh \
 	statnode.cc statnode.hh \
+	svc-records.cc svc-records.hh \
+	tcpiohandler-mplexer.hh \
 	tcpiohandler.cc tcpiohandler.hh \
 	threadname.hh threadname.cc \
 	uuid-utils.hh uuid-utils.cc \
-	views.hh \
-	xpf.cc xpf.hh \
-	ext/luawrapper/include/LuaContext.hpp \
-	ext/json11/json11.cpp \
-	ext/json11/json11.hpp \
-	ext/incbin/incbin.h \
-	ext/libbpf/libbpf.h
+	xpf.cc xpf.hh
 
 testrunner_SOURCES = \
 	base64.hh \
-	dns.hh \
+	bpf-filter.cc bpf-filter.hh \
+	cachecleaner.hh \
+	circular_buffer.hh \
+	connection-management.hh \
+	dns.cc dns.hh \
+	dnscrypt.cc dnscrypt.hh \
+	dnsdist-backend.cc \
+	dnsdist-cache.cc dnsdist-cache.hh \
+	dnsdist-dynblocks.cc dnsdist-dynblocks.hh \
+	dnsdist-dynbpf.cc dnsdist-dynbpf.hh \
+	dnsdist-ecs.cc dnsdist-ecs.hh \
+	dnsdist-idstate.cc \
+	dnsdist-kvs.cc dnsdist-kvs.hh \
+	dnsdist-lbpolicies.cc dnsdist-lbpolicies.hh \
+	dnsdist-lua-bindings-dnsquestion.cc \
+	dnsdist-lua-bindings-kvs.cc \
+	dnsdist-lua-bindings.cc \
+	dnsdist-lua-ffi-interface.h dnsdist-lua-ffi-interface.inc \
+	dnsdist-lua-ffi.cc dnsdist-lua-ffi.hh \
+	dnsdist-lua-vars.cc \
+	dnsdist-proxy-protocol.cc dnsdist-proxy-protocol.hh \
+	dnsdist-rings.cc dnsdist-rings.hh \
+	dnsdist-rules.cc dnsdist-rules.hh \
+	dnsdist-tcp-downstream.cc \
+	dnsdist-tcp.cc \
+	dnsdist-xpf.cc dnsdist-xpf.hh \
+	dnsdist.hh \
+	dnslabeltext.cc \
+	dnsname.cc dnsname.hh \
+	dnsparser.hh dnsparser.cc \
+	dnswriter.cc dnswriter.hh \
+	dolog.hh \
+	ednscookies.cc ednscookies.hh \
+	ednsoptions.cc ednsoptions.hh \
+	ednssubnet.cc ednssubnet.hh \
+	ext/luawrapper/include/LuaContext.hpp \
+	gettime.cc gettime.hh \
+	iputils.cc iputils.hh \
+	misc.cc misc.hh \
+	namespaces.hh \
+	noinitvector.hh \
+	pdnsexception.hh \
+	pollmplexer.cc \
+	proxy-protocol.cc proxy-protocol.hh \
+	qtype.cc qtype.hh \
+	sholder.hh \
+	sodcrypto.cc \
+	sstuff.hh \
+	stat_t.hh \
+	statnode.cc statnode.hh \
+	svc-records.cc svc-records.hh \
 	test-base64_cc.cc \
+	test-connectionmanagement_hh.cc \
 	test-delaypipe_hh.cc \
 	test-dnscrypt_cc.cc \
 	test-dnsdist_cc.cc \
@@ -217,56 +280,16 @@ testrunner_SOURCES = \
 	test-dnsdistpacketcache_cc.cc \
 	test-dnsdistrings_cc.cc \
 	test-dnsdistrules_cc.cc \
+	test-dnsdisttcp_cc.cc \
 	test-dnsparser_cc.cc \
 	test-iputils_hh.cc \
+	test-luawrapper.cc \
 	test-mplexer.cc \
 	test-proxy_protocol_cc.cc \
-	bpf-filter.cc bpf-filter.hh \
-	cachecleaner.hh \
-	circular_buffer.hh \
-	dnsdist.hh \
-	dnsdist-backend.cc \
-	dnsdist-cache.cc dnsdist-cache.hh \
-	dnsdist-dynblocks.cc dnsdist-dynblocks.hh \
-	dnsdist-dynbpf.cc dnsdist-dynbpf.hh \
-	dnsdist-ecs.cc dnsdist-ecs.hh \
-	dnsdist-kvs.cc dnsdist-kvs.hh \
-	dnsdist-lbpolicies.cc dnsdist-lbpolicies.hh \
-	dnsdist-lua-bindings.cc \
-	dnsdist-lua-bindings-dnsquestion.cc \
-	dnsdist-lua-bindings-kvs.cc \
-	dnsdist-lua-ffi.cc dnsdist-lua-ffi.hh \
-	dnsdist-lua-ffi-interface.h dnsdist-lua-ffi-interface.inc \
-	dnsdist-lua-vars.cc \
-	dnsdist-rings.hh \
-	dnsdist-xpf.cc dnsdist-xpf.hh \
-	dnscrypt.cc dnscrypt.hh \
-	dnslabeltext.cc \
-	dnsname.cc dnsname.hh \
-	dnsparser.hh dnsparser.cc \
-	dnswriter.cc dnswriter.hh \
-	dolog.hh \
-	ednsoptions.cc ednsoptions.hh \
-	ednscookies.cc ednscookies.hh \
-	ednssubnet.cc ednssubnet.hh \
-	gettime.cc gettime.hh \
-	iputils.cc iputils.hh \
-	misc.cc misc.hh \
-	namespaces.hh \
-	pdnsexception.hh \
-	pollmplexer.cc \
-	proxy-protocol.cc proxy-protocol.hh \
-	qtype.cc qtype.hh \
-	sholder.hh \
-	sodcrypto.cc \
-	sstuff.hh \
-	statnode.cc statnode.hh \
-	svc-records.cc svc-records.hh \
-	threadname.hh threadname.cc \
 	testrunner.cc \
+	threadname.hh threadname.cc \
 	uuid-utils.hh uuid-utils.cc \
-	xpf.cc xpf.hh \
-	ext/luawrapper/include/LuaContext.hpp
+	xpf.cc xpf.hh
 
 dnsdist_LDFLAGS = \
 	$(AM_LDFLAGS) \
@@ -280,7 +303,6 @@ dnsdist_LDADD = \
 	$(YAHTTP_LIBS) \
 	$(LIBSODIUM_LIBS) \
 	$(FSTRM_LIBS) \
-	$(SANITIZER_FLAGS) \
 	$(SYSTEMD_LIBS) \
 	$(NET_SNMP_LIBS) \
 	$(LIBCAP_LIBS) \
@@ -298,7 +320,6 @@ testrunner_LDADD = \
 	$(LIBSODIUM_LIBS) \
 	$(LUA_LIBS) \
 	$(RT_LIBS) \
-	$(SANITIZER_FLAGS) \
 	$(LIBCAP_LIBS)
 
 if HAVE_CDB
@@ -349,24 +370,12 @@ endif
 
 CLEANFILES += lua.hpp
 
-if HAVE_PROTOBUF
-if HAVE_PROTOC
-dnsmessage.pb.cc: dnsmessage.proto
-	$(AM_V_GEN)$(PROTOC) -I$(srcdir) --cpp_out=./ $<
-
-dnstap.pb.cc: dnstap.proto
-	$(AM_V_GEN)$(PROTOC) -I$(srcdir) --cpp_out=./ $<
-
-BUILT_SOURCES += dnsmessage.pb.cc dnstap.pb.cc
-
-nodist_dnsdist_SOURCES = dnsmessage.pb.cc dnsmessage.pb.h dnstap.pb.cc dnstap.pb.h
-dnsdist_LDADD += $(PROTOBUF_LIBS)
-
-dnsdist.$(OBJEXT): dnsmessage.pb.cc dnstap.pb.cc
-endif
-endif
-
 if HAVE_FREEBSD
+dnsdist_SOURCES += kqueuemplexer.cc
+testrunner_SOURCES += kqueuemplexer.cc
+endif
+
+if HAVE_OPENBSD
 dnsdist_SOURCES += kqueuemplexer.cc
 testrunner_SOURCES += kqueuemplexer.cc
 endif
@@ -389,15 +398,15 @@ MANPAGES=dnsdist.1
 
 dist_man_MANS=$(MANPAGES)
 
-if HAVE_VIRTUALENV
+if HAVE_VENV
 if !HAVE_MANPAGES
 $(MANPAGES): %: docs/manpages/%.rst .venv
 	$(AM_V_GEN).venv/bin/python -msphinx -b man docs . $<
 endif # if !HAVE_MANPAGES
 
 .venv: docs/requirements.txt
-	virtualenv .venv
-	.venv/bin/pip install -U pip setuptools setuptools-git
+	$(PYTHON) -m venv .venv
+	.venv/bin/pip install -U pip setuptools setuptools-git wheel
 	.venv/bin/pip install -r $<
 
 latex/dnsdist.pdf: docs/** .venv
@@ -419,17 +428,17 @@ upload-docs: all-docs
 	rsync -crv --no-p --chmod=g=rwX --exclude '*~' ./html-docs.tar.bz2 web1.powerdns.com:/srv/www/dnsdist.org
 	rsync -crv --no-p --chmod=g=rwX --exclude '*~' ./dnsdist.pdf web1.powerdns.com:/srv/www/dnsdist.org
 
-else # if HAVE_VIRTUALENV
+else # if HAVE_VENV
 $(MANPAGES):
-	@echo "You need virtualenv to generate the manpages"
+	@echo "You need Python 3 and the 'venv' module to generate the manpages"
 	exit 1
 
 html-docs: %: docs/manpages/%.rst .venv
-	@echo "You need virtualenv to generate the HTML documentation"
+	@echo "You need Python 3 and the 'venv' module to generate the HTML docs"
 	exit 1
 
 dnsdist.pdf:
-	@echo "You need virtualenv to generate the pdf documentation"
+	@echo "You need Python 3 and the 'venv' module to generate the PDF"
 	exit 1
 endif
 

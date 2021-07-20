@@ -31,12 +31,14 @@
 
 class HttpRequest : public YaHTTP::Request {
 public:
-  HttpRequest(const string& logprefix_="") : YaHTTP::Request(), accept_json(false), accept_html(false), complete(false), logprefix(logprefix_) { };
+  HttpRequest(const string& logprefix_="") : YaHTTP::Request(), logprefix(logprefix_) { };
 
-  bool accept_json;
-  bool accept_html;
-  bool complete;
   string logprefix;
+  bool accept_yaml{false};
+  bool accept_json{false};
+  bool accept_html{false};
+  bool complete{false};
+
   json11::Json json();
 
   // checks password _only_.
@@ -49,7 +51,10 @@ public:
   HttpResponse() : YaHTTP::Response() { };
   HttpResponse(const YaHTTP::Response &resp) : YaHTTP::Response(resp) { };
 
-  void setBody(const json11::Json& document);
+  void setPlainBody(const string& document);
+  void setYamlBody(const string& document);
+  void setJsonBody(const string& document);
+  void setJsonBody(const json11::Json& document);
   void setErrorResult(const std::string& message, const int status);
   void setSuccessResult(const std::string& message, const int status = 200);
 };
@@ -151,7 +156,7 @@ protected:
 class WebServer : public boost::noncopyable
 {
 public:
-  WebServer(const string &listenaddress, int port);
+  WebServer(string listenaddress, int port);
   virtual ~WebServer() { };
 
   void setApiKey(const string &apikey) {
@@ -173,12 +178,12 @@ public:
   void bind();
   void go();
 
-  void serveConnection(std::shared_ptr<Socket> client) const;
+  void serveConnection(const std::shared_ptr<Socket>& client) const;
   void handleRequest(HttpRequest& request, HttpResponse& resp) const;
 
   typedef boost::function<void(HttpRequest* req, HttpResponse* resp)> HandlerFunction;
-  void registerApiHandler(const string& url, HandlerFunction handler, bool allowPassword=false);
-  void registerWebHandler(const string& url, HandlerFunction handler);
+  void registerApiHandler(const string& url, const HandlerFunction& handler, bool allowPassword=false);
+  void registerWebHandler(const string& url, const HandlerFunction& handler);
 
   enum class LogLevel : uint8_t {
     None = 0,                // No logs from requests at all
@@ -214,7 +219,7 @@ public:
   };
 
 protected:
-  void registerBareHandler(const string& url, HandlerFunction handler);
+  void registerBareHandler(const string& url, const HandlerFunction& handler);
   void logRequest(const HttpRequest& req, const ComboAddress& remote) const;
   void logResponse(const HttpResponse& resp, const ComboAddress& remote, const string& logprefix) const;
 
@@ -228,9 +233,9 @@ protected:
   std::shared_ptr<Server> d_server;
 
   std::string d_apikey;
-  void apiWrapper(WebServer::HandlerFunction handler, HttpRequest* req, HttpResponse* resp, bool allowPassword);
+  void apiWrapper(const WebServer::HandlerFunction& handler, HttpRequest* req, HttpResponse* resp, bool allowPassword);
   std::string d_webserverPassword;
-  void webWrapper(WebServer::HandlerFunction handler, HttpRequest* req, HttpResponse* resp);
+  void webWrapper(const WebServer::HandlerFunction& handler, HttpRequest* req, HttpResponse* resp);
 
   ssize_t d_maxbodysize; // in bytes
 

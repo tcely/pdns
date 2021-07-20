@@ -4,6 +4,9 @@ Changelogs for all pre 4.0 releases
 **Note**: Beyond PowerDNS 2.9.20, the Authoritative Server and Recursor are released separately.
 Hence, this changelog starts at version 3.0.
 
+**Note**: pre-4.0 releases are End of Life and no longer supported.
+See :doc:`EOL Statements <../appendices/EOL>`.
+
 PowerDNS Recursor 3.6.4
 -----------------------
 
@@ -2142,8 +2145,6 @@ offer less than the best in spoofing protection. We urge all operators
 of resolvers without proper spoofing countermeasures to consider
 PowerDNS, as it is a Better Internet Nameserver Daemon.
 
-A good article on DNS spoofing can be found
-`here <http://www.securesphere.net/download/papers/dnsspoof.htm>`__.
 Some more information, based on a previous version of PowerDNS, can be
 found on the `PowerDNS development
 blog <http://blog.netherlabs.nl/articles/2006/04/14/holy-cow-1-3-million-additional-ip-addresses-served-by-powerdns>`__.

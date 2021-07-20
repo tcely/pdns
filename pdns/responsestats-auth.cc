@@ -7,7 +7,7 @@ extern StatBag S;
  *  Function that creates all the stats
  *  when udpOrTCP is true, it is udp
  */
-void ResponseStats::submitResponse(DNSPacket &p, bool udpOrTCP) {
+void ResponseStats::submitResponse(DNSPacket &p, bool udpOrTCP, bool last) const {
   const string& buf=p.getString();
   static AtomicCounter &udpnumanswered=*S.getPointer("udp-answers");
   static AtomicCounter &udpnumanswered4=*S.getPointer("udp4-answers");
@@ -23,9 +23,12 @@ void ResponseStats::submitResponse(DNSPacket &p, bool udpOrTCP) {
   static AtomicCounter &tcpbytesanswered6=*S.getPointer("tcp6-answers-bytes");
 
   if(p.d.aa) {
-    if (p.d.rcode==RCode::NXDomain)
+    if (p.d.rcode==RCode::NXDomain) {
+      S.inc("nxdomain-packets");
       S.ringAccount("nxdomain-queries", p.qdomain, p.qtype);
+    }
   } else if (p.d.rcode == RCode::Refused) {
+    S.inc("unauth-packets");
     S.ringAccount("unauth-queries", p.qdomain, p.qtype);
     S.ringAccount("remotes-unauth",p.d_remote);
   }
@@ -41,14 +44,19 @@ void ResponseStats::submitResponse(DNSPacket &p, bool udpOrTCP) {
       udpbytesanswered6+=buf.length();
     }
   } else { //tcp
-    tcpnumanswered++;
     tcpbytesanswered+=buf.length();
     if(p.d_remote.sin4.sin_family==AF_INET) {
-      tcpnumanswered4++;
       tcpbytesanswered4+=buf.length();
     } else {
-      tcpnumanswered6++;
       tcpbytesanswered6+=buf.length();
+    }
+    if(last) {
+     tcpnumanswered++;
+     if(p.d_remote.sin4.sin_family==AF_INET) {
+      tcpnumanswered4++;
+     } else {
+      tcpnumanswered6++;
+     }
     }
   }
 

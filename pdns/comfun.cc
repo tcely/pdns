@@ -27,6 +27,7 @@
 #include <atomic>
 #include <thread>
 #include <unordered_set>
+#include <deque>
 #include "inflighter.cc"
 //#include "malloctrace.hh"
 StatBag S;
@@ -62,7 +63,7 @@ struct SendReceive
   typedef int Identifier;
   typedef DNSResult Answer; // ip 
   int d_socket;
-  deque<uint16_t> d_idqueue;
+  std::deque<uint16_t> d_idqueue;
     
   SendReceive(map<ComboAddress, namecount, ComboAddress::addressOnlyLessThan>& res) : d_res(res)
   {
@@ -116,7 +117,7 @@ struct SendReceive
         return 0;
       }
       else {
-        d_receiveds++;
+        d_received++;
       }
       // parse packet, set 'id', fill out 'ip' 
       
@@ -173,7 +174,7 @@ struct SendReceive
 
   }
   unsigned int d_errors, d_nxdomains, d_nodatas, d_oks, d_unknowns;
-  unsigned int d_receiveds, d_receiveerrors, d_senderrors;
+  unsigned int d_received, d_receiveerrors, d_senderrors;
   map<ComboAddress, namecount, ComboAddress::addressOnlyLessThan>& d_res;
 };
 
@@ -191,7 +192,7 @@ struct SendReceiveRes
   typedef int Identifier;
   typedef RESResult Answer; // ip 
   int d_socket;
-  deque<uint16_t> d_idqueue;
+  std::deque<uint16_t> d_idqueue;
   map<DNSName, vector<ComboAddress>>& d_out;
   SendReceiveRes(const ComboAddress& remote, map<DNSName,vector<ComboAddress>>& out) : d_out(out)
   {
@@ -247,7 +248,7 @@ struct SendReceiveRes
         return 0;
       }
       else {
-        d_receiveds++;
+        d_received++;
       }
       // parse packet, set 'id', fill out 'ip' 
       
@@ -294,7 +295,7 @@ struct SendReceiveRes
     cout<<'\n';
   }
   unsigned int d_errors, d_nxdomains, d_nodatas, d_oks, d_unknowns;
-  unsigned int d_receiveds, d_receiveerrors, d_senderrors;
+  unsigned int d_received, d_receiveerrors, d_senderrors;
 };
 
 

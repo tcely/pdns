@@ -304,10 +304,6 @@ Add these lines to the ``pdns.conf``::
   api=yes
   api-key=changeme
 
-.. versionchanged:: 4.1.0
-
-  Setting :ref:`setting-api` also implicitly enables the webserver.
-
 And restart, the following examples should start working::
 
   curl -v -H 'X-API-Key: changeme' http://127.0.0.1:8081/api/v1/servers/localhost | jq .
@@ -318,7 +314,9 @@ Working with the API
 
 This chapter describes the PowerDNS Authoritative API.
 When creating an API wrapper (for instance when fronting multiple API's), it is recommended to stick to this API specification.
-The API is described in the `OpenAPI format <https://www.openapis.org/>`_, also known as "Swagger", and this description is `available <https://raw.githubusercontent.com/PowerDNS/pdns/master/docs/http-api/swagger/authoritative-api-swagger.yaml>`_.
+The API is described in the `OpenAPI format <https://www.openapis.org/>`_, also known as "Swagger", and this description is `available <https://raw.githubusercontent.com/PowerDNS/pdns/master/docs/http-api/swagger/authoritative-api-swagger.yaml>`_. It can also be obtained from a running server if the administrator of that server has enabled the API; it
+is available at the  `/api/docs` endpoint in both YAML and JSON formats (the 'Accept' header can be used to indicate the
+desired format).
 
 Authentication
 ~~~~~~~~~~~~~~

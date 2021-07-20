@@ -29,9 +29,13 @@
 #include "logger.hh"
 
 #include <sys/types.h>
-#include "pdns/packetcache.hh"
+#include "packetcache.hh"
+#include "auth-zonecache.hh"
 #include "dnspacket.hh"
 #include "dns.hh"
+#include "statbag.hh"
+
+extern StatBag S;
 
 // this has to be somewhere central, and not in a file that requires Lua
 // this is so the geoipbackend can set this pointer if loaded for lua-record.cc
@@ -127,7 +131,7 @@ void BackendMakerClass::load(const string &module)
 {
   bool res;
 
-  if(module.find(".")==string::npos)
+  if(module.find('.')==string::npos)
     res=UeberBackend::loadmodule(arg()["module-dir"]+"/lib"+module+"backend.so");
   else if(module[0]=='/' || (module[0]=='.' && module[1]=='/') || (module[0]=='.' && module[1]=='.'))    // absolute or current path
     res=UeberBackend::loadmodule(module);
@@ -152,9 +156,7 @@ void BackendMakerClass::launch(const string &instr)
     if (count(parts.begin(), parts.end(), part) > 1)
       throw ArgException("Refusing to launch multiple backends with the same name '" + part + "', verify all 'launch' statements in your configuration");
 
-  for(vector<string>::const_iterator i=parts.begin();i!=parts.end();++i) {
-    const string &part=*i;
-
+  for(const auto & part : parts) {
     string module, name;
     vector<string>pparts;
     stringtok(pparts,part,": ");
@@ -241,6 +243,7 @@ vector<DNSBackend *> BackendMakerClass::all(bool metadataOnly)
 bool DNSBackend::getSOA(const DNSName &domain, SOAData &sd)
 {
   this->lookup(QType(QType::SOA),domain,-1);
+  S.inc("backend-queries");
 
   DNSResourceRecord rr;
   rr.auth = true;
@@ -257,20 +260,10 @@ bool DNSBackend::getSOA(const DNSName &domain, SOAData &sd)
 
   if(!hits)
     return false;
+
   sd.qname = domain;
-  if(!sd.nameserver.countLabels())
-    sd.nameserver= DNSName(arg()["default-soa-name"]);
-
-  if(!sd.hostmaster.countLabels()) {
-    if (!arg().isEmpty("default-soa-mail")) {
-      sd.hostmaster= DNSName(arg()["default-soa-mail"]);
-      // attodot(sd.hostmaster); FIXME400
-    }
-    else
-      sd.hostmaster=DNSName("hostmaster")+domain;
-  }
-
   sd.db=this;
+
   return true;
 }
 
@@ -285,37 +278,12 @@ bool DNSBackend::get(DNSZoneRecord& dzr)
   dzr.scopeMask = rr.scopeMask;
   if(rr.qtype.getCode() == QType::TXT && !rr.content.empty() && rr.content[0]!='"')
     rr.content = "\""+ rr.content + "\"";
-  if(rr.qtype.getCode() == QType::SOA) {
-    try {
-      dzr.dr = DNSRecord(rr);
-    } catch(...) {
-      vector<string> parts;
-      stringtok(parts, rr.content, " \t");
-      if(parts.size() < 1)
-        rr.content = arg()["default-soa-name"];
-      if(parts.size() < 2)
-        rr.content += " " +arg()["default-soa-mail"];
-      if(parts.size() < 3)
-        rr.content += " 0";
-      if(parts.size() < 4)
-        rr.content += " " + ::arg()["soa-refresh-default"];
-      if(parts.size() < 5)
-        rr.content += " " + ::arg()["soa-retry-default"];
-      if(parts.size() < 6)
-        rr.content += " " + ::arg()["soa-expire-default"];
-      if(parts.size() < 7)
-        rr.content += " " + ::arg()["soa-minimum-ttl"];
-      dzr.dr = DNSRecord(rr);
-    }
+  try {
+    dzr.dr = DNSRecord(rr);
   }
-  else {
-    try {
-      dzr.dr = DNSRecord(rr);
-    }
-    catch(...) {
-      while(this->get(rr));
-      throw;
-    }
+  catch(...) {
+    while(this->get(rr));
+    throw;
   }
   return true;
 }
@@ -328,6 +296,14 @@ bool DNSBackend::getBeforeAndAfterNames(uint32_t id, const DNSName& zonename, co
   before += lczonename;
   after += lczonename;
   return ret;
+}
+
+void DNSBackend::getAllDomains(vector<DomainInfo>* domains, bool include_disabled)
+{
+  if (g_zoneCache.isEnabled()) {
+    g_log << Logger::Error << "One of the backends does not support zone caching. Put zone-cache-refresh-interval=0 in the config file to disable this cache." << endl;
+    exit(1);
+  }
 }
 
 void fillSOAData(const DNSZoneRecord& in, SOAData& sd)
@@ -356,41 +332,20 @@ std::shared_ptr<DNSRecordContent> makeSOAContent(const SOAData& sd)
     return std::make_shared<SOARecordContent>(sd.nameserver, sd.hostmaster, st);
 }
 
-
 void fillSOAData(const string &content, SOAData &data)
 {
-  // content consists of fields separated by spaces:
-  //  nameservername hostmaster serial-number [refresh [retry [expire [ minimum] ] ] ]
-
-  // fill out data with some plausible defaults:
-  // 10800 3600 604800 3600
   vector<string>parts;
   parts.reserve(7);
-  stringtok(parts,content);
-  int pleft=parts.size();
-
-  //  cout<<"'"<<content<<"'"<<endl;
-
-  if(pleft)
-    data.nameserver=DNSName(parts[0]);
-
-  if(pleft>1) 
-    data.hostmaster=DNSName(attodot(parts[1])); // ahu@ds9a.nl -> ahu.ds9a.nl, piet.puk@ds9a.nl -> piet\.puk.ds9a.nl
+  stringtok(parts, content);
 
   try {
-    data.serial = pleft > 2 ? pdns_stou(parts[2]) : 0;
-
-    data.refresh = pleft > 3 ? pdns_stou(parts[3])
-      : ::arg().asNum("soa-refresh-default");
-
-    data.retry = pleft > 4 ? pdns_stou(parts[4].c_str())
-      : ::arg().asNum("soa-retry-default");
-
-    data.expire = pleft > 5 ? pdns_stou(parts[5].c_str())
-      : ::arg().asNum("soa-expire-default");
-
-    data.minimum = pleft > 6 ? pdns_stou(parts[6].c_str())
-      : ::arg().asNum("soa-minimum-ttl");
+    data.nameserver = DNSName(parts.at(0));
+    data.hostmaster = DNSName(attodot(parts.at(1))); // ahu@ds9a.nl -> ahu.ds9a.nl, piet.puk@ds9a.nl -> piet\.puk.ds9a.nl
+    data.serial = pdns_stou(parts.at(2).c_str());
+    data.refresh = pdns_stou(parts.at(3).c_str());
+    data.retry = pdns_stou(parts.at(4).c_str());
+    data.expire = pdns_stou(parts.at(5).c_str());
+    data.minimum = pdns_stou(parts.at(6).c_str());
   }
   catch(const std::out_of_range& oor) {
     throw PDNSException("Out of range exception parsing "+content);
