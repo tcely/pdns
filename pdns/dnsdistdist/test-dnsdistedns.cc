@@ -234,9 +234,9 @@ BOOST_AUTO_TEST_CASE(test_locateEDNSOptRR)
     pw.getHeader()->rd = 1;
     pw.addOpt(1232, 0, 0);
     pw.commit();
-    BOOST_CHECK_EQUAL(locateEDNSOptRR(packet, &optStart, &optLen, &last), 0U);
+    BOOST_CHECK_EQUAL(locateEDNSOptRR(packet, &optStart, &optLen, &last), 0);
     BOOST_CHECK_EQUAL(optStart, 29);
-    BOOST_CHECK_EQUAL(optLen, 11);
+    BOOST_CHECK_EQUAL(optLen, 11U);
     BOOST_CHECK(last);
 
     // Make only a header, should error, as there is no question section but QDCOUNT=1
@@ -277,9 +277,9 @@ BOOST_AUTO_TEST_CASE(test_locateEDNSOptRR)
     pw.commit();
     pw.startRecord(DNSName("notroot"), QType::OPT, 3600, QClass::IN, DNSResourceRecord::Place::ADDITIONAL, false);
     pw.commit();
-    BOOST_CHECK_EQUAL(locateEDNSOptRR(packet, &optStart, &optLen, &last), 0U);
+    BOOST_CHECK_EQUAL(locateEDNSOptRR(packet, &optStart, &optLen, &last), 0);
     BOOST_CHECK_EQUAL(optStart, 29);
-    BOOST_CHECK_EQUAL(optLen, 11);
+    BOOST_CHECK_EQUAL(optLen, 11U);
     BOOST_CHECK(!last);
   }
 }
@@ -352,7 +352,7 @@ BOOST_AUTO_TEST_CASE(addEDNSPadding)
     // A packet where padding *should* be added
     auto packetWithEDNSNoPadding = getPacket(true, defaultEdnsBufSize, 0);
     BOOST_CHECK(dnsdist::edns::addEDNSPadding(packetWithEDNSNoPadding, defaultEdnsBufSize));
-    BOOST_CHECK_EQUAL(packetWithEDNSNoPadding.size() % 468, 0);
+    BOOST_CHECK_EQUAL(packetWithEDNSNoPadding.size() % 468, 0U);
   }
 }
 
