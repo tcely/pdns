@@ -3214,7 +3214,7 @@ static void setupLuaConfig(LuaContext& luaCtx, bool client, bool configCheck)
         customName = std::optional(*optCustomName);
       }
       if (!customName) {
-        std::optional<declare_metric_opts_t> vars = {boost::get<declare_metric_opts_t>(opts.value())};
+        std::optional<declare_metric_opts_t> vars{boost::get<declare_metric_opts_t>(opts.value())};
         getOptionalValue<std::string>(vars, "customName", customName);
         getOptionalValue<bool>(vars, "withLabels", withLabels);
         checkAllParametersConsumed("declareMetric", vars);
@@ -3238,7 +3238,7 @@ static void setupLuaConfig(LuaContext& luaCtx, bool client, bool configCheck)
       step = *custom_step;
     }
     else {
-      std::optional<update_metric_opts_t> vars = {boost::get<update_metric_opts_t>(incOpts)};
+      std::optional<update_metric_opts_t> vars{boost::get<update_metric_opts_t>(incOpts)};
       getOptionalValue<uint64_t>(vars, "step", step);
       getOptionalValue<LuaAssociativeTable<std::string>>(vars, "labels", labels);
       checkAllParametersConsumed("incMetric", vars);
@@ -3261,7 +3261,7 @@ static void setupLuaConfig(LuaContext& luaCtx, bool client, bool configCheck)
       step = *custom_step;
     }
     else {
-      std::optional<update_metric_opts_t> vars = {boost::get<update_metric_opts_t>(decOpts)};
+      std::optional<update_metric_opts_t> vars{boost::get<update_metric_opts_t>(decOpts)};
       getOptionalValue<uint64_t>(vars, "step", step);
       getOptionalValue<LuaAssociativeTable<std::string>>(vars, "labels", labels);
       checkAllParametersConsumed("decMetric", vars);
