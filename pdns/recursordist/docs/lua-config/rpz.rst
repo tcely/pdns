@@ -32,9 +32,9 @@ The RPZ specifications mention that a match on the response record from a higher
    If RPZ supplies local data giving a particular A record, RPZ policies will not apply to that response IP address", as stated in section 6.1 of the RPZ specifications.
 
 .. note::
-  For versions before 5.5.0 all RPZ results end up in the packet cache (if the packet cache is enabled).
+  For versions before 5.5.0, all RPZ results end up in the packet cache (if the packet cache is enabled).
   If needed, set a short :ref:`setting-yaml-packetcache.ttl` to limit the time old entries are served after an RPZ (re)load.
-  Starting with version 5.5.0 client IP trigger results will not end up in the packet cache and by default QNAME triggers found in the new RPZ are cleared from the packet cache on RPZ (re)load. See :ref:`wipePacketCache`.
+  Starting with version 5.5.0, client IP trigger results will not end up in the packet cache and by default QNAME triggers found in the new RPZ are cleared from the packet cache on RPZ (re)load. See :ref:`wipePacketCache`.
 
 Configuring RPZ
 ---------------
