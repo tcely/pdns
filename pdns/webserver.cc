@@ -74,7 +74,7 @@ bool HttpRequest::compareAuthorization(const CredentialsHolder& credentials) con
     string plain;
     B64Decode(cookie, plain);
 
-    if (auto colon = plain.find(":"); colon != std::string::npos) {
+    if (auto colon = plain.find(':'); colon != std::string::npos) {
       auth_ok = credentials.matches(plain.substr(colon + 1));
     }
   }

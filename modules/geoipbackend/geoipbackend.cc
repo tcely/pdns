@@ -129,7 +129,7 @@ static bool validateMappingLookupFormats(const vector<string>& formats)
 
   for (const auto& lookupFormat : formats) {
     last = 0;
-    while ((cur = lookupFormat.find("%", last)) != string::npos) {
+    while ((cur = lookupFormat.find('%', last)) != string::npos) {
       if (lookupFormat.compare(cur, 3, "%mp") == 0) {
         return false;
       }
