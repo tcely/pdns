@@ -118,7 +118,7 @@ namespace YaHTTP {
           break;
         }
         // split headers
-        if ((pos1 = line.find(":")) == std::string::npos) {
+        if ((pos1 = line.find(':')) == std::string::npos) {
           throw ParseError("Malformed header line");
         }
         key = line.substr(0, pos1);
@@ -138,7 +138,7 @@ namespace YaHTTP {
         } else {
           if (key == "host" && target->kind == YAHTTP_TYPE_REQUEST) {
             // maybe it contains port?
-            if ((pos1 = value.find(":")) == std::string::npos) {
+            if ((pos1 = value.find(':')) == std::string::npos) {
               target->url.host = value;
             } else {
               target->url.host = value.substr(0, pos1);
