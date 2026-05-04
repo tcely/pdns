@@ -800,6 +800,24 @@ int getFakeAAAARecords(const DNSName& qname, ComboAddress prefix, vector<DNSReco
   return rcode;
 }
 
+static std::pair<uint8_t, bool> parseNibble(const std::string& label)
+{
+  if (label.size() != 1) {
+    return {0, false};
+  }
+  auto digit = label[0];
+  if (digit >= '0' && digit <= '9') {
+    return {digit - '0', true};
+  }
+  if (digit >= 'a' && digit <= 'f') {
+    return {digit - 'a' + 10, true};
+  }
+  if (digit >= 'A' && digit <= 'F') {
+    return {digit - 'A' + 10, true};
+  }
+  return {0, false};
+}
+
 int getFakePTRRecords(const DNSName& qname, vector<DNSRecord>& ret)
 {
   /* qname has a reverse ordered IPv6 address, need to extract the underlying IPv4 address from it
@@ -813,8 +831,16 @@ int getFakePTRRecords(const DNSName& qname, vector<DNSRecord>& ret)
 
   string newquery;
   for (size_t octet = 0; octet < 4; ++octet) {
-    newquery += std::to_string(stoll(parts[octet * 2], nullptr, 16) + 16 * stoll(parts[octet * 2 + 1], nullptr, 16));
-    newquery.append(1, '.');
+    auto [value1, valid1] = parseNibble(parts[octet * 2]);
+    if (!valid1) {
+      return RCode::ServFail;
+    }
+    auto [value2, valid2] = parseNibble(parts[(octet * 2) + 1]);
+    if (!valid2) {
+      return RCode::ServFail;
+    }
+    newquery += std::to_string(value1 + (value2 * 16));
+    newquery += '.';
   }
   newquery += "in-addr.arpa.";
 
