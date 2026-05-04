@@ -5560,7 +5560,7 @@ bool SyncRes::doResolveAtThisIP(const std::string& prefix, const DNSName& qname,
   }
 
   d_bytesReceived += lwr.d_bytesReceived;
-  checkMaxQperQ(qname)
+  checkMaxQperQ(qname);
 
   d_totUsec += lwr.d_usec;
 
