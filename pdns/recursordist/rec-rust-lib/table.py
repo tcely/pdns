@@ -3458,9 +3458,9 @@ Interval (in hours) to re-read the ``trustanchorfile``.  Zero disables periodic 
         "default": "",
         "help": "Sequence of protobuf servers",
         "doc": """
-Sequence of outgoing protobuf servers. Currently the maximum size of this list is one.
+Sequence of protobuf servers receiving protobuf messages on client requests and/or answers. Currently the maximum size of this list is one.
         """,
-        "skip-old": "Equivalent Lua config in :doc:`lua-config/protobuf`",
+        "skip-old": "Equivalent Lua config in :func:`protobufServer`",
         "versionadded": "5.1.0",
         "runtime": ["reload-lua-config", "reload-yaml"],
     },
@@ -3471,9 +3471,9 @@ Sequence of outgoing protobuf servers. Currently the maximum size of this list i
         "default": "",
         "help": "List of outgoing protobuf servers",
         "doc": """
-Sequence of outgoing protobuf servers. Currently the maximum size of this list is one.
+Sequence of protobuf servers receiving protobuf messages on outgoing requests and/or answers. Currently the maximum size of this list is one.
         """,
-        "skip-old": "Equivalent Lua config in :doc:`lua-config/protobuf`",
+        "skip-old": "Equivalent Lua config in :func:`outgoingProtobufServer`",
         "versionadded": "5.1.0",
         "runtime": ["reload-lua-config", "reload-yaml"],
     },
