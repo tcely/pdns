@@ -150,7 +150,7 @@ static void sendErrorOverTCP(std::unique_ptr<DNSComboWriter>& comboWriter, int r
   header.cd = comboWriter->d_mdp.d_header.cd;
   header.rcode = rcode;
 
-  sendResponseOverTCP(comboWriter, packet);
+  sendResponseOverTCP(comboWriter, packet, g_slogtcpin);
 }
 
 void finishTCPReply(std::unique_ptr<DNSComboWriter>& comboWriter, bool hadError, bool updateInFlight)
@@ -413,14 +413,14 @@ static void doProcessTCPQuestion(std::unique_ptr<DNSComboWriter>& comboWriter, s
   if (comboWriter->d_mdp.d_header.qr) {
     t_Counters.at(rec::Counter::ignoredCount)++;
     if (g_logCommonErrors) {
-      g_slogtcpin->info(Logr::Error, "Ignoring answer from TCP client on server socket", "remote", Logging::Loggable(comboWriter->getRemote()));
+      g_slogtcpin->info(Logr::Error, "Ignoring answer from TCP client on server socket", "remote", Logging::Loggable(comboWriter->d_remote), "source", Logging::Loggable(comboWriter->d_source));
     }
     return;
   }
   if (comboWriter->d_mdp.d_header.opcode != static_cast<unsigned>(Opcode::Query) && comboWriter->d_mdp.d_header.opcode != static_cast<unsigned>(Opcode::Notify)) {
     t_Counters.at(rec::Counter::ignoredCount)++;
     if (g_logCommonErrors) {
-      g_slogtcpin->info(Logr::Error, "Ignoring unsupported opcode from TCP client", "remote", Logging::Loggable(comboWriter->getRemote()), "opcode", Logging::Loggable(Opcode::to_s(comboWriter->d_mdp.d_header.opcode)));
+      g_slogtcpin->info(Logr::Error, "Ignoring unsupported opcode from TCP client", "remote", Logging::Loggable(comboWriter->d_remote), "source", Logging::Loggable(comboWriter->d_source), "opcode", Logging::Loggable(Opcode::to_s(comboWriter->d_mdp.d_header.opcode)));
     }
     sendErrorOverTCP(comboWriter, RCode::NotImp);
     tcpGuard.keep();
@@ -429,7 +429,7 @@ static void doProcessTCPQuestion(std::unique_ptr<DNSComboWriter>& comboWriter, s
   if (dnsheader->qdcount == 0U) {
     t_Counters.at(rec::Counter::emptyQueriesCount)++;
     if (g_logCommonErrors) {
-      g_slogtcpin->info(Logr::Error, "Ignoring empty (qdcount == 0) query on server socket", "remote", Logging::Loggable(comboWriter->getRemote()));
+      g_slogtcpin->info(Logr::Error, "Ignoring empty (qdcount == 0) query on server socket", "remote", Logging::Loggable(comboWriter->d_remote), "source", Logging::Loggable(comboWriter->d_source));
     }
     sendErrorOverTCP(comboWriter, RCode::NotImp);
     tcpGuard.keep();
@@ -468,7 +468,7 @@ static void doProcessTCPQuestion(std::unique_ptr<DNSComboWriter>& comboWriter, s
         }
 
         auto answerMatch = comboWriter->d_eventTrace.add(RecEventTrace::AnswerSent);
-        bool hadError = sendResponseOverTCP(comboWriter, response);
+        bool hadError = sendResponseOverTCP(comboWriter, response, g_slogtcpin);
         finishTCPReply(comboWriter, hadError, false);
         struct timeval now{};
         Utility::gettimeofday(&now, nullptr);

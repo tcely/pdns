@@ -1173,7 +1173,8 @@ void startDoResolve(void* arg) // NOLINT(readability-function-cognitive-complexi
 
     resolver.d_slog = resolver.d_slog->withValues("qname", Logging::Loggable(comboWriter->d_mdp.d_qname),
                                                   "qtype", Logging::Loggable(QType(comboWriter->d_mdp.d_qtype)),
-                                                  "remote", Logging::Loggable(comboWriter->getRemote()),
+                                                  "remote", Logging::Loggable(comboWriter->d_remote),
+                                                  "source", Logging::Loggable(comboWriter->d_source),
                                                   "proto", Logging::Loggable(comboWriter->d_tcp ? "tcp" : "udp"),
                                                   "ecs", Logging::Loggable(comboWriter->d_ednssubnet.getSource().empty() ? "" : comboWriter->d_ednssubnet.getSource().toString()),
                                                   "mtid", Logging::Loggable(g_multiTasker->getTid()));
@@ -1801,7 +1802,7 @@ void startDoResolve(void* arg) // NOLINT(readability-function-cognitive-complexi
       }
     }
     else {
-      bool hadError = sendResponseOverTCP(comboWriter, packet);
+      bool hadError = sendResponseOverTCP(comboWriter, packet, g_slogtcpin);
       finishTCPReply(comboWriter, hadError, true);
       tcpGuard.setHandled();
     }
@@ -2640,7 +2641,7 @@ static void handleNewUDPQuestion(int fileDesc, FDMultiplexer::funcparam_t& /* va
         else if (dnsheader->opcode != static_cast<unsigned>(Opcode::Query) && dnsheader->opcode != static_cast<unsigned>(Opcode::Notify)) {
           t_Counters.at(rec::Counter::ignoredCount)++;
           if (g_logCommonErrors) {
-            g_slogudpin->info(Logr::Error, "Ignoring unsupported opcode server socket", "remote", Logging::Loggable(fromaddr), "opcode", Logging::Loggable(Opcode::to_s(dnsheader->opcode)));
+            g_slogudpin->info(Logr::Error, "Ignoring unsupported opcode on server socket", "remote", Logging::Loggable(fromaddr), "opcode", Logging::Loggable(Opcode::to_s(dnsheader->opcode)));
           }
         }
         else if (dnsheader->qdcount == 0U) {
