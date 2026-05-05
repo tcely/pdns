@@ -469,7 +469,7 @@ webserver:
     - name: "api_read_write"
       type: "bool"
       default: "false"
-      description: "Allow modifications via the API. Optionally saving these changes to disk. Modifications done via the API will not be written to the configuration by default and will not persist after a reload"
+      description: "Allow modifications of the configuration via the API. Optionally saving these changes to disk. Modifications done via the API will not be written to the configuration by default and will not persist after a reload. Note that flushing the content of the packet cache via DELETE requests is still allowed even if the API is read-only"
 
 console:
   description: "Console-related settings"

@@ -404,11 +404,12 @@ Webserver configuration
 
 .. function:: setAPIWritable(allow [,dir])
 
-  Allow modifications via the API.
+  Allow modifications of the configuration via the API.
   Optionally saving these changes to disk.
-  Modifications done via the API will not be written to the configuration by default and will not persist after a reload
+  Modifications done via the API will not be written to the configuration by default and will not persist after a reload.
+  Note that flushing the content of the packet cache via DELETE requests is still allowed even if the API is read-only.
 
-  :param bool allow: Set to true to allow modification through the API
+  :param bool allow: Set to true to allow modification of the configuration through the API
   :param str dir: A valid directory where the configuration files will be written by the API.
 
 .. function:: setWebserverConfig(options)
