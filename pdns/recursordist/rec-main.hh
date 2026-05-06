@@ -89,15 +89,6 @@ struct DNSComboWriter
     d_socket = sock;
   }
 
-  // get a string representation of the client address, including proxy info if applicable
-  string getRemote() const
-  {
-    if (d_source == d_remote) {
-      return d_source.toStringWithPort();
-    }
-    return d_source.toStringWithPort() + " (proxied by " + d_remote.toStringWithPort() + ")";
-  }
-
   std::vector<ProxyProtocolValue> d_proxyProtocolValues;
   MOADNSParser d_mdp;
   struct timeval d_now;
@@ -287,7 +278,7 @@ inline MT_t* getMT()
 
 /* this function is called with both a string and a vector<uint8_t> representing a packet */
 template <class T>
-static bool sendResponseOverTCP(const std::unique_ptr<DNSComboWriter>& comboWriter, const T& packet)
+static bool sendResponseOverTCP(const std::unique_ptr<DNSComboWriter>& comboWriter, const T& packet, Logr::log_t log)
 {
   std::array<uint8_t, 2> buf{};
   buf[0] = packet.size() / 256;
@@ -303,14 +294,14 @@ static bool sendResponseOverTCP(const std::unique_ptr<DNSComboWriter>& comboWrit
   bool hadError = true;
 
   if (wret == 0) {
-    g_log << Logger::Warning << "EOF writing TCP answer to " << comboWriter->getRemote() << endl;
+    log->info(Logr::Warning, "EOF writing TCP answer", "remote", Logging::Loggable(comboWriter->d_remote), "source", Logging::Loggable(comboWriter->d_source));
   }
   else if (wret < 0) {
     int err = errno;
-    g_log << Logger::Warning << "Error writing TCP answer to " << comboWriter->getRemote() << ": " << stringerror(err) << endl;
+    log->error(Logr::Warning, err, "Error writing TCP", "remote", Logging::Loggable(comboWriter->d_remote), "source", Logging::Loggable(comboWriter->d_source));
   }
   else if ((unsigned int)wret != 2 + packet.size()) {
-    g_log << Logger::Warning << "Oops, partial answer sent to " << comboWriter->getRemote() << " for " << comboWriter->d_mdp.d_qname << " (size=" << (2 + packet.size()) << ", sent " << wret << ")" << endl;
+    log->info(Logr::Warning, "Partial answer sent", "remote", Logging::Loggable(comboWriter->d_remote), "source", Logging::Loggable(comboWriter->d_source), "size", Logging::Loggable(2 + packet.size()), "sent", Logging::Loggable(wret));
   }
   else {
     hadError = false;
